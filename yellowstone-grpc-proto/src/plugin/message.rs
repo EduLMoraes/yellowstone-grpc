@@ -458,6 +458,7 @@ pub enum Message {
     Entry(Arc<MessageEntry>),
     BlockMeta(Arc<MessageBlockMeta>),
     Block(Arc<MessageBlock>),
+    AtaOwner(MessageAccount),
 }
 
 impl Message {
@@ -469,6 +470,7 @@ impl Message {
             Self::Entry(msg) => msg.slot,
             Self::BlockMeta(msg) => msg.slot,
             Self::Block(msg) => msg.meta.slot,
+            Self::AtaOwner(msg) => msg.slot,
         }
     }
 

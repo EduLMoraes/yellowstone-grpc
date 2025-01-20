@@ -538,6 +538,7 @@ impl Action {
                         accounts_data_slice,
                         ping,
                         from_slot: args.from_slot,
+                        ata_owner: todo!(),
                     },
                     args.resub.unwrap_or(0),
                     args.stats,
@@ -902,6 +903,7 @@ async fn geyser_subscribe(
                     accounts_data_slice: Vec::default(),
                     ping: None,
                     from_slot: None,
+                    ata_owner: todo!(),
                 })
                 .await
                 .map_err(GeyserGrpcClientError::SubscribeSendError)?;

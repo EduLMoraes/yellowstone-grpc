@@ -609,6 +609,7 @@ impl GrpcService {
                                 Message::Entry(_) => "Entry",
                                 Message::BlockMeta(_) => "BlockMeta",
                                 Message::Block(_) => "Block",
+                                Message::AtaOwner(_) => "AtaOwner",
                             };
                             metrics::update_invalid_blocks(format!("unexpected message {kind}"));
                         }

@@ -93,26 +93,7 @@ async fn main() -> anyhow::Result<()> {
 
     let commitment: CommitmentLevel = args.commitment.unwrap_or_default().into();
     subscribe_tx
-        .send(SubscribeRequest {
-            slots: HashMap::new(),
-            accounts: HashMap::new(),
-            transactions: HashMap::new(),
-            transactions_status: hashmap! { "".to_owned() => SubscribeRequestFilterTransactions {
-                vote: args.vote,
-                failed: args.failed,
-                signature: args.signature,
-                account_include: args.account_include,
-                account_exclude: args.account_exclude,
-                account_required: args.account_required,
-            } },
-            entry: HashMap::new(),
-            blocks: HashMap::new(),
-            blocks_meta: hashmap! { "".to_owned() => SubscribeRequestFilterBlocksMeta {} },
-            commitment: Some(commitment as i32),
-            accounts_data_slice: vec![],
-            ping: None,
-            from_slot: None,
-        })
+        .send(SubscribeRequest {slots:HashMap::new(),accounts:HashMap::new(),transactions:HashMap::new(),transactions_status:hashmap!{"".to_owned()=>SubscribeRequestFilterTransactions{vote:args.vote,failed:args.failed,signature:args.signature,account_include:args.account_include,account_exclude:args.account_exclude,account_required:args.account_required,}},entry:HashMap::new(),blocks:HashMap::new(),blocks_meta:hashmap!{"".to_owned()=>SubscribeRequestFilterBlocksMeta{}},commitment:Some(commitment.into()),accounts_data_slice:vec![],ping:None,from_slot:None, ata_owner: todo!() })
         .await?;
 
     let mut messages: BTreeMap<u64, (Option<DateTime<Utc>>, Vec<String>)> = BTreeMap::new();

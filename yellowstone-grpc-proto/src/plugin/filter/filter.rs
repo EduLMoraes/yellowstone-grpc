@@ -109,6 +109,7 @@ pub struct Filter {
     blocks_meta: FilterBlocksMeta,
     commitment: CommitmentLevel,
     accounts_data_slice: FilterAccountsDataSlice,
+    ata_owner: FilterAtaOwner,
     ping: Option<i32>,
 }
 
@@ -130,6 +131,7 @@ impl Default for Filter {
             blocks_meta: FilterBlocksMeta::default(),
             commitment: CommitmentLevel::Processed,
             accounts_data_slice: FilterAccountsDataSlice::default(),
+            ata_owner: FilterAtaOwner::default(),
             ping: None,
         }
     }
@@ -164,6 +166,7 @@ impl Filter {
                 &config.accounts_data_slice,
                 limits.accounts.data_slice_max,
             )?,
+            ata_owner: FilterAtaOwner::default(),
             ping: config.ping.as_ref().map(|msg| msg.id),
         })
     }
@@ -240,6 +243,7 @@ impl Filter {
             Message::Entry(message) => self.entries.get_updates(message),
             Message::Block(message) => self.blocks.get_updates(message, &self.accounts_data_slice),
             Message::BlockMeta(message) => self.blocks_meta.get_updates(message),
+            Message::AtaOwner(message) => self.ata_owner.get_updates(message, &self.accounts_data_slice),
         }
     }
 
@@ -342,11 +346,6 @@ impl FilterAccounts {
         accounts_data_slice: &FilterAccountsDataSlice,
     ) -> FilteredUpdates {
         let mut filter = FilterAccountsMatch::new(self);
-
-        if message.account.data.len() == 165 {
-            println!("Message: {:?}", message.clone());
-        }
-
         filter.match_txn_signature(&message.account.txn_signature);
         filter.match_account(&message.account.pubkey);
         filter.match_owner(&message.account.owner);
@@ -365,6 +364,194 @@ impl FilterAccounts {
         )
     }
 }
+
+#[derive(Debug, Default, Clone)]
+struct FilterAtaOwner {
+    account: HashMap<Pubkey, HashSet<FilterName>>,
+    account_required: HashSet<FilterName>,
+    filters: Vec<(FilterName, FilterAccountsState)>,
+    ata_owners: HashMap<Pubkey, HashSet<FilterName>>,
+    ata_owners_required: HashSet<FilterName>,
+    token_program: TokenPrograms
+}
+
+impl FilterAtaOwner {
+    fn new(
+        configs: &HashMap<String, SubscribeRequestFilterAccounts>,
+        limits: &FilterLimitsAccounts,
+        names: &mut FilterNames,
+    ) -> FilterResult<Self> {
+        FilterLimits::check_max(configs.len(), limits.max)?;
+
+        let mut this = Self::default();
+        for (name, filter) in configs {
+            FilterLimits::check_any(
+                filter.account.is_empty() && filter.owner.is_empty(),
+                limits.any,
+            )?;
+            FilterLimits::check_pubkey_max(filter.account.len(), limits.account_max)?;
+            FilterLimits::check_pubkey_max(filter.owner.len(), limits.owner_max)?;
+
+            Self::set(
+                &mut this.account,
+                &mut this.account_required,
+                name,
+                names,
+                Filter::decode_pubkeys(&filter.account, &limits.account_reject),
+            )?;
+           
+            Self::set(
+                &mut this.ata_owners,
+                &mut this.ata_owners_required,
+                name,
+                names,
+                Filter::decode_pubkeys(&filter.ata_owner, &limits.owner_reject),
+            )?;
+
+            this.filters
+                .push((names.get(name)?, FilterAccountsState::new(&filter.filters)?));
+        }
+        Ok(this)
+    }
+
+    fn set(
+        map: &mut HashMap<Pubkey, HashSet<FilterName>>,
+        map_required: &mut HashSet<FilterName>,
+        name: &str,
+        names: &mut FilterNames,
+        keys: impl Iterator<Item = FilterResult<Pubkey>>,
+    ) -> FilterResult<bool> {
+        let mut required = false;
+        for maybe_key in keys {
+            if map.entry(maybe_key?).or_default().insert(names.get(name)?) {
+                required = true;
+            }
+        }
+
+        if required {
+            map_required.insert(names.get(name)?);
+        }
+        Ok(required)
+    }
+
+    fn get_updates(
+        &self,
+        message: &MessageAccount,
+        accounts_data_slice: &FilterAccountsDataSlice,
+    ) -> FilteredUpdates {
+        let mut filter = FilterAtaOwnerMatch::new(self);
+        filter.match_account(&message.account.pubkey);
+        filter.match_data_lamports(&message.account.data, message.account.lamports);
+        filter.match_ata_owner(&message.account.data);
+
+        dbg!(&filter.filter);
+
+        let filters = filter.get_filters();
+        dbg!(&filters);
+
+        filtered_updates_once_owned!(
+            filters,
+            FilteredUpdateOneof::account(message, accounts_data_slice.clone()),
+            message.created_at
+        )
+    }
+}
+
+#[derive(Debug)]
+struct FilterAtaOwnerMatch<'a> {
+    filter: &'a FilterAtaOwner,
+    account: HashSet<&'a str>,
+    data: HashSet<&'a str>,
+    ata_owner: HashSet<&'a str>,
+}
+
+impl<'a> FilterAtaOwnerMatch<'a> {
+    fn new(filter: &'a FilterAtaOwner) -> Self {
+        Self {
+            filter,
+            account: Default::default(),
+            data: Default::default(),
+            ata_owner: Default::default(),
+        }
+    }
+
+    fn extend(
+        set: &mut HashSet<&'a str>,
+        map: &'a HashMap<Pubkey, HashSet<FilterName>>,
+        key: &Pubkey,
+    ) {
+        if let Some(names) = map.get(key) {
+            for name in names {
+                set.insert(name.as_ref());
+            }
+        }
+    }
+    
+    fn match_account(&mut self, pubkey: &Pubkey) {
+        Self::extend(&mut self.account, &self.filter.account, pubkey)
+    }
+
+    fn match_ata_owner(&mut self, data: &[u8]) {
+        Self::extend(
+            &mut self.ata_owner,
+            &self.filter.ata_owners,
+            &Pubkey::new_from_array(
+                data[32..64]
+                    .try_into()
+                    .expect("slice with incorrect length"),
+            ),
+        );
+    }
+
+    fn match_data_lamports(&mut self, data: &[u8], lamports: u64) {
+        for (name, filter) in self.filter.filters.iter() {
+            if filter.is_match(data, lamports) {
+                self.data.insert(name.as_ref());
+            }
+        }
+    }
+
+    fn get_filters(&self) -> FilteredUpdateFilters {
+        self.filter
+            .filters
+            .iter()
+            .filter_map(|(filter_name, filter)| {
+                let name = filter_name.as_ref();
+                let af = &self.filter;
+
+                
+                if af.account_required.contains(name) && !self.account.contains(name) {
+                    return None;
+                }
+                
+                if af.ata_owners_required.contains(name) && !self.ata_owner.contains(name) {
+                    return None;
+                }
+
+                if !filter.is_empty() && !self.data.contains(name) {
+                    return None;
+                }
+
+                Some(filter_name.clone())
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone)]
+enum TokenPrograms{
+    TokenProgram,
+    TokenProgram2022,
+    Both,
+}
+
+impl Default for TokenPrograms{
+    fn default() -> Self {
+        TokenPrograms::Both
+    }
+}
+
+
 
 #[derive(Debug, Default, Clone)]
 struct FilterAccountsState {
@@ -564,30 +751,15 @@ impl<'a> FilterAccountsMatch<'a> {
     }
 
     fn match_ata_owner(&mut self, data: &[u8]) {
-        println!("LEN: {:?}", data.len());
-        if data.len() == 165 {
-            let ata_owner_pubkey = Pubkey::new_from_array(
+        Self::extend(
+            &mut self.ata_owner,
+            &self.filter.ata_owners,
+            &Pubkey::new_from_array(
                 data[32..64]
                     .try_into()
                     .expect("slice with incorrect length"),
-            );
-
-            Self::extend(
-                &mut self.ata_owner,
-                &self.filter.ata_owners,
-                &ata_owner_pubkey,
-            );
-
-            println!("Deserialized Pubkey: {:?}", ata_owner_pubkey);
-            println!("Hash Set ata_owner: {:?}", self.ata_owner);
-            println!("Filters: {:?}", self.filter.ata_owners);
-            println!("ata_owners_required: {:?}", self.filter.ata_owners_required);
-        } else {
-            eprintln!(
-                "Data slice is too small. Expected at least 64 bytes, got {}",
-                data.len()
-            );
-        }
+            ),
+        );
     }
 
     fn match_data_lamports(&mut self, data: &[u8], lamports: u64) {
@@ -1241,6 +1413,7 @@ mod tests {
             accounts_data_slice: Vec::new(),
             ping: None,
             from_slot: None,
+            ata_owner: HashMap::new(),
         };
         let limit = FilterLimits::default();
         let filter = Filter::new(&config, &limit, &mut create_filter_names());
@@ -1253,11 +1426,12 @@ mod tests {
 
         accounts.insert(
             "solend".to_owned(),
-            SubscribeRequestFilterAccounts {
+            SubscribeRequestFilterAccounts{
                 nonempty_txn_signature: None,
                 account: vec![],
                 owner: vec![],
                 filters: vec![],
+                ata_owner: todo!(),
             },
         );
 
@@ -1273,6 +1447,7 @@ mod tests {
             accounts_data_slice: Vec::new(),
             ping: None,
             from_slot: None,
+            ata_owner: todo!(),
         };
         let mut limit = FilterLimits::default();
         limit.accounts.any = false;

@@ -31,6 +31,7 @@ message SubscribeRequest {
   map<string, SubscribeRequestFilterBlocks> blocks = 4;
   map<string, SubscribeRequestFilterBlocksMeta> blocks_meta = 5;
   map<string, SubscribeRequestFilterEntry> entry = 8;
+  map<string, SubscribeRequestFilterAtaOwner> ata_owner = 12;
   optional CommitmentLevel commitment = 6;
   repeated SubscribeRequestAccountsDataSlice accounts_data_slice = 7;
   optional SubscribeRequestPing ping = 9;
@@ -43,6 +44,12 @@ message SubscribeRequestFilterAccounts {
   repeated SubscribeRequestFilterAccountsFilter filters = 4;
   repeated string ata_owner = 5;
   optional bool nonempty_txn_signature = 6;
+}
+
+message SubscribeRequestFilterAtaOwner {
+  repeated string account = 1;
+  repeated SubscribeRequestFilterAtaOwner filters = 2;
+  repeated string ata_owner = 3;
 }
 
 message SubscribeRequestFilterAccountsFilter {
