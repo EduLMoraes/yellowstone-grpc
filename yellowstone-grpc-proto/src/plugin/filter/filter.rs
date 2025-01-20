@@ -348,7 +348,10 @@ impl FilterAccounts {
         filter.match_data_lamports(&message.account.data, message.account.lamports);
         filter.match_ata_owner(&message.account.data);
 
+        dbg!("Filtro: ", &filter.filter);
+
         let filters = filter.get_filters();
+        dbg!("Filtros: ", &filters);
 
         filtered_updates_once_owned!(
             filters,
@@ -556,6 +559,7 @@ impl<'a> FilterAccountsMatch<'a> {
     }
 
     fn match_ata_owner(&mut self, data: &[u8]) {
+        dbg!(AccountsFilterMemcmpOneof::Base58(data.to_vec()));
         Self::extend(
             &mut self.ata_owner,
             &self.filter.ata_owners,

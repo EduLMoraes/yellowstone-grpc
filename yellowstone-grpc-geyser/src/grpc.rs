@@ -765,22 +765,26 @@ impl GrpcService {
                                 || !confirmed_messages.is_empty()
                                 || !finalized_messages.is_empty()
                             {
-                                let _ = broadcast_tx
+                                let result = broadcast_tx
                                     .send((CommitmentLevel::Processed, processed_messages.into()));
                                 processed_messages = Vec::with_capacity(PROCESSED_MESSAGES_MAX);
                                 processed_sleep
                                     .as_mut()
                                     .reset(Instant::now() + PROCESSED_MESSAGES_SLEEP);
+
+                                dbg!(result.is_ok());
                             }
 
                             if !confirmed_messages.is_empty() {
-                                let _ =
+                                let result =
                                     broadcast_tx.send((CommitmentLevel::Confirmed, confirmed_messages.into()));
+                                dbg!(result.is_ok());
                             }
 
                             if !finalized_messages.is_empty() {
-                                let _ =
+                                let result =
                                     broadcast_tx.send((CommitmentLevel::Finalized, finalized_messages.into()));
+                                dbg!(result.is_ok());
                             }
                         }
                     }
