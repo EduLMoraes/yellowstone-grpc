@@ -559,16 +559,22 @@ impl<'a> FilterAccountsMatch<'a> {
     }
 
     fn match_ata_owner(&mut self, data: &[u8]) {
-        dbg!(AccountsFilterMemcmpOneof::Base58(data.to_vec()));
-        Self::extend(
-            &mut self.ata_owner,
-            &self.filter.ata_owners,
-            &Pubkey::new_from_array(
-                data[32..64]
-                    .try_into()
-                    .expect("slice with incorrect length"),
-            ),
-        );
+        if data.len() >= 64 {
+            Self::extend(
+                &mut self.ata_owner,
+                &self.filter.ata_owners,
+                &Pubkey::new_from_array(
+                    data[32..64]
+                        .try_into()
+                        .expect("slice with incorrect length"),
+                ),
+            );
+        } else {
+            eprintln!(
+                "Data slice is too small. Expected at least 64 bytes, got {}",
+                data.len()
+            );
+        }
     }
 
     fn match_data_lamports(&mut self, data: &[u8], lamports: u64) {
@@ -1239,6 +1245,7 @@ mod tests {
                 account: vec![],
                 owner: vec![],
                 filters: vec![],
+                ata_owner: vec![],
             },
         );
 
