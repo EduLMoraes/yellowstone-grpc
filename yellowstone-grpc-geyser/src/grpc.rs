@@ -499,7 +499,7 @@ impl GrpcService {
         replay_stored_slots: u64,
     ) {
         const PROCESSED_MESSAGES_MAX: usize = 31;
-        const PROCESSED_MESSAGES_SLEEP: Duration = Duration::from_millis(10);
+        const PROCESSED_MESSAGES_SLEEP: Duration = Duration::from_secs(3);
 
         let mut msgid_gen = MessageId::default();
         let mut messages: BTreeMap<u64, SlotMessages> = Default::default();
@@ -765,26 +765,22 @@ impl GrpcService {
                                 || !confirmed_messages.is_empty()
                                 || !finalized_messages.is_empty()
                             {
-                                let result = broadcast_tx
+                                let _ = broadcast_tx
                                     .send((CommitmentLevel::Processed, processed_messages.into()));
                                 processed_messages = Vec::with_capacity(PROCESSED_MESSAGES_MAX);
                                 processed_sleep
                                     .as_mut()
                                     .reset(Instant::now() + PROCESSED_MESSAGES_SLEEP);
-
-                                dbg!(result.is_ok());
                             }
 
                             if !confirmed_messages.is_empty() {
-                                let result =
+                                let _ =
                                     broadcast_tx.send((CommitmentLevel::Confirmed, confirmed_messages.into()));
-                                dbg!(result.is_ok());
                             }
 
                             if !finalized_messages.is_empty() {
-                                let result =
+                                let _ =
                                     broadcast_tx.send((CommitmentLevel::Finalized, finalized_messages.into()));
-                                dbg!(result.is_ok());
                             }
                         }
                     }

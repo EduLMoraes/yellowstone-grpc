@@ -442,7 +442,6 @@ impl Action {
                             owner: args.accounts_owner.clone(),
                             ata_owner: todo!(),
                             filters,
-                            ata_owner: vec![]
                         },
                     );
                 }

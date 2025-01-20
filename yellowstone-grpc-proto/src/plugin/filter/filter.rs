@@ -348,10 +348,10 @@ impl FilterAccounts {
         filter.match_data_lamports(&message.account.data, message.account.lamports);
         filter.match_ata_owner(&message.account.data);
 
-        dbg!("Filtro: ", &filter.filter);
+        dbg!(&filter.filter);
 
         let filters = filter.get_filters();
-        dbg!("Filtros: ", &filters);
+        dbg!(&filters);
 
         filtered_updates_once_owned!(
             filters,
@@ -559,22 +559,15 @@ impl<'a> FilterAccountsMatch<'a> {
     }
 
     fn match_ata_owner(&mut self, data: &[u8]) {
-        if data.len() >= 64 {
-            Self::extend(
-                &mut self.ata_owner,
-                &self.filter.ata_owners,
-                &Pubkey::new_from_array(
-                    data[32..64]
-                        .try_into()
-                        .expect("slice with incorrect length"),
-                ),
-            );
-        } else {
-            eprintln!(
-                "Data slice is too small. Expected at least 64 bytes, got {}",
-                data.len()
-            );
-        }
+        Self::extend(
+            &mut self.ata_owner,
+            &self.filter.ata_owners,
+            &Pubkey::new_from_array(
+                data[32..64]
+                    .try_into()
+                    .expect("slice with incorrect length"),
+            ),
+        );
     }
 
     fn match_data_lamports(&mut self, data: &[u8], lamports: u64) {
@@ -1245,7 +1238,6 @@ mod tests {
                 account: vec![],
                 owner: vec![],
                 filters: vec![],
-                ata_owner: vec![],
             },
         );
 
